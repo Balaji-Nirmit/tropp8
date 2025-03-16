@@ -37,7 +37,7 @@ SIMPLE_JWT={
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'base.authenticate.CustomCookieAuthentication',
+        'rest_api.authenticate.CustomCookieAuthentication',
     )
 }
 
