@@ -1,14 +1,12 @@
-import Left from "../components/left";
-import MidHome from "../components/midHome";
-import Right from "../components/right";
-import SearchBar from "../components/searchbar";
+import AddPost from "../components/addPost"
+import MidHome from "../components/midHome"
 
 const Home=()=>{
-    
     return (
         <>
-            <MidHome></MidHome>
+            <AddPost />
+            <MidHome specificUserProfile={null}/>
         </>
     )
 }
-export default Home;
+export default Home

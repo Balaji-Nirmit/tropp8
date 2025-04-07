@@ -3,29 +3,45 @@ import { toggleLike } from "../api/endpoints";
 import HorizontalBar from "./horizontalBar";
 import { constants } from "../constants/constants";
 import { Swiper, SwiperSlide } from 'swiper/react';
-import 'swiper/css/pagination';
 import 'swiper/css';
-import 'swiper/css/effect-creative';
-import { EffectCreative, Mousewheel, Pagination } from 'swiper/modules';
+import 'swiper/css/free-mode';
+import 'swiper/css/navigation';
+import 'swiper/css/thumbs';
+
+import { FreeMode, Navigation, Thumbs } from 'swiper/modules';
 import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
+import OverlayModal from "./overlayModal";
+import LikeAnimation from "./component-assets/likeAnimation";
+import LikeButtonAnimation from "./component-assets/likeButtonAnimation";
+
 
 const PostCard = ({ prop }) => {
     const [likeCount, setLikeCount] = useState(prop.like_count)
-    const [likedByMe, setLikedByMe] = useState(prop.liked)
+    const [likedByMe, setLikedByMe] = useState(prop.liked_by_me)
     const { ref, inView } = useInView({ threshold: 0.1, triggerOnce: true })
-    
+    const [thumbsSwiper, setThumbsSwiper] = useState(null);
+    const [isOpenLiked, setOpenLiked] = useState(false);
+    const [showHeart, setShowHeart] = useState(false)
+
 
     const handleToggleLike = async () => {
         const data = await toggleLike(prop.id)
-        if (data.now_liked) {
+        if (data.liked) {
             setLikeCount(likeCount + 1)
             setLikedByMe(true)
+            setShowHeart(true)
+            setTimeout(() =>
+                setShowHeart(false), 800
+            )
         }
         else {
             setLikeCount(likeCount - 1)
             setLikedByMe(false)
         }
+    }
+    const openCloseLiked = () => {
+        setOpenLiked(!isOpenLiked)
     }
     return (
         <>
@@ -41,30 +57,19 @@ const PostCard = ({ prop }) => {
                 </div>
                 <p className="text-sm text-gray-600 font-sm ml-9">{prop.description}</p>
 
-                <div className="w-[500px] ml-4">
+                <div className="w-[500px] flex flex-col gap-2 ml-4">
                     <Swiper
-                        modules={[Pagination, Mousewheel, EffectCreative]}
-                        effect={'creative'}
-                        creativeEffect={{
-                            prev: {
-                              shadow: true,
-                              translate: [0, 0, -400],
-                            },
-                            next: {
-                              translate: ['100%', 0, 0],
-                            },
-                          }}
-                        direction="horizontal"
-                        mousewheel={true}
-                        spaceBetween={50}
-                        slidesPerView={1}
-                        pagination={{
-                            dynamicBullets: true,
-                            clickable: true,
+                        style={{
+                            '--swiper-navigation-color': '#000',
+                            '--swiper-pagination-color': '#000',
                         }}
-                        onSlideChange={() => console.log("slide change")}
-                        onSwiper={(swiper) => console.log(swiper)}
-                        className="w-[460px] h-[360px] rounded-2xl cursor-pointer shadow-sm"
+                        spaceBetween={10}
+                        navigation={true}
+                        thumbs={{ swiper: thumbsSwiper }}
+                        modules={[FreeMode, Navigation, Thumbs]}
+                        className="w-[460px] h-[360px] shadow-md rounded-2xl"
+                        onDoubleTap={handleToggleLike}
+
                     >
                         {prop.images.map((item) => (
                             <SwiperSlide
@@ -72,32 +77,48 @@ const PostCard = ({ prop }) => {
                                 className="w-[460px] h-[360px] overflow-hidden rounded-2xl bg-cover bg-center"
                             >
                                 <img
-                                    src={`${constants.SERVER_URL + item.image_url}`}
+                                    src={`${item.image_url}`}
+                                    className="w-full h-full object-cover rounded-2xl"
+                                />
+                            </SwiperSlide>
+                        ))}
+                    </Swiper>
+                    <Swiper
+                        onSwiper={setThumbsSwiper}
+                        spaceBetween={10}
+                        slidesPerView={3}
+                        freeMode={true}
+                        watchSlidesProgress={true}
+                        modules={[FreeMode, Navigation, Thumbs]}
+                        className="w-[460px] h-[150px] py-4 rounded-2xl"
+
+                    >
+                        {prop.images.map((item) => (
+                            <SwiperSlide
+                                key={item.id}
+                                className="w-[460px] h-[360px] overflow-hidden shadow-md rounded-2xl bg-cover bg-center"
+                            >
+                                <img
+                                    src={`${item.image_url}`}
                                     className="w-full h-full object-cover rounded-2xl"
                                 />
                             </SwiperSlide>
                         ))}
                     </Swiper>
                 </div>
-
-
-
                 <div className="w-[460px] text-gray-800 ml-9">
                     <div className="mt-3 flex items-center gap-3">
-                        <span className="text-gray-600 text-sm">{likeCount} Likes</span>
-                        <button
-                            onClick={handleToggleLike}
-                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${likedByMe
-                                ? "bg-red-500 text-white hover:bg-red-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
-                        >
-                            {likedByMe ? "Liked ❤️" : "Like 👍"}
-                        </button>
+                        {likeCount ? <span className="text-gray-600 text-sm cursor-pointer hover:underline" onClick={openCloseLiked}>{likeCount} Likes</span>
+                            : <span className="text-gray-600 text-sm">{likeCount} Likes</span>
+                        }
+                        <LikeButtonAnimation handleToggleLike={handleToggleLike} likedByMe={likedByMe}/>
+                        {showHeart && <LikeAnimation/>}
                     </div>
                 </div>
-
             </motion.div>
+
+            {/* overlay */}
+            {isOpenLiked && <OverlayModal prop={prop.id} openCloseMethod={openCloseLiked} title={'Likes'} />}
         </>
     )
 }

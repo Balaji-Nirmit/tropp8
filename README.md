@@ -226,3 +226,9 @@ Instead of listening to scroll events, we use the Intersection Observer API via 
 + Check when it comes into view using useInView().
 + Trigger fetchData() whenever the last element is visible.
 + Append new posts to the existing list.
+
+# Notification system 
+```
+pip install channels daphne
+pip install django-channels-jwt-auth-middleware
+```

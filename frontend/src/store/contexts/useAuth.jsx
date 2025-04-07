@@ -31,7 +31,13 @@ export const AuthProvider=({children})=>{
                 'email':data.user.email,
                 'first_name':data.user.first_name,
                 'last_name':data.user.last_name,
-                'profile_image':data.user.profile_image
+                'profile_image':data.user.profile_image,
+                'banner_image':data.user.banner_image,
+                'is_active':data.user.isActive,
+                'isEmailVerified':data.user.isEmailVerified,
+                'isAccountVerified':data.user.isAccountVerified,
+                'isDirectFollow':data.user.isDirectFollow,
+                'created_at':data.user.created_at,
             }
             localStorage.setItem('userData',JSON.stringify(userdata))
             nav('/home')

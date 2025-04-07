@@ -1,16 +1,28 @@
-import { MdOutlineInsertPhoto } from "react-icons/md";
+import { MdClass, MdLogout, MdOutlineInsertPhoto, MdSettings } from "react-icons/md";
 import { BsPeople } from "react-icons/bs";
-import { IoHomeOutline } from "react-icons/io5";
+import { IoHomeOutline, IoSettings } from "react-icons/io5";
 import { FaForumbee } from "react-icons/fa";
 import { FaRegMessage } from "react-icons/fa6";
 import { CiShop } from "react-icons/ci";
-import { RiAdvertisementLine } from "react-icons/ri";
 import { TbBrandBlogger } from "react-icons/tb";
 import { constants } from "../constants/constants";
-import { Link } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { logout } from "../api/endpoints";
+import { RiUserCommunityLine } from "react-icons/ri";
+
 
 const Left = () => {
     const data = JSON.parse(localStorage.getItem('userData'))
+    const nav = useNavigate()
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+            nav('/login')
+        } catch {
+            alert('error logging out')
+        }
+    }
     return (
         <>
             <div className="w-[23%] h-full overflow-y-auto border-r-1 border-r-gray-300 fixed top-0 left-0">
@@ -33,15 +45,114 @@ const Left = () => {
                 </div>
                 <div className="bg-gray-100 h-[60%] flex justify-center items-center">
                     <div className="grid grid-cols-2 gap-8">
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><IoHomeOutline /><p>Home</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><MdOutlineInsertPhoto /><p>Album</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><BsPeople /><p>Group</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><FaForumbee /><p>Forum</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><FaRegMessage /><p>Messages</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><CiShop /><p>Shop</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><RiAdvertisementLine /><p>Adverts</p></span>
-                        <span className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"><TbBrandBlogger /><p>Blogs</p></span>
+                        <NavLink
+                            to="/home"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <IoHomeOutline />
+                            <p>Home</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <MdOutlineInsertPhoto />
+                            <p>Album</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <BsPeople />
+                            <p>Group</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <FaForumbee />
+                            <p>Forum</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <FaRegMessage />
+                            <p>Messages</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <CiShop />
+                            <p>Shop</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/settings"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <IoSettings />
+                            <p>Settings</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <TbBrandBlogger />
+                            <p>Blogs</p>
+                        </NavLink>
+
+                        <NavLink
+                            to="/clubs"
+                            className={({ isActive }) =>
+                                `flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${isActive ? "text-purple-500 font-bold" : "text-gray-500 hover:text-purple-500"
+                                }`
+                            }
+                        >
+                            <RiUserCommunityLine />
+                            <p>Clubs</p>
+                        </NavLink>
+
+                        <span
+                            onClick={handleLogout}
+                            className="flex flex-col justify-center items-center text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300"
+                        >
+                            <MdLogout />
+                            <p>Logout</p>
+                        </span>
                     </div>
+
                 </div>
             </div>
         </>

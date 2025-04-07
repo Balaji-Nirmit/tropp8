@@ -8,14 +8,21 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .serializers import MyUserProfileSerializer, UserRegisterSerializer, PostSerializer, MyUserUpdateSerializer, FollowerFollowingSerializer
-from .models import MyUser,Post,PostImage,PostLike,Follower,FollowRequest
+from .serializers import MyUserProfileSerializer, UserRegisterSerializer, PostSerializer, MyUserUpdateSerializer, FollowerFollowingSerializer, MyInstitutionSerializer, UserInstitutionSerializer, ClubSerializer,ClubListSerializer
+
+from .models import MyUser,Post,PostImage,PostLike,Follower,FollowRequest, MyInstitution, UserInstitution, Club, ClubMember
+
 from django.db.models import Count, Prefetch
 from django.db import transaction
 
 import uuid
 
 from rest_framework.pagination import CursorPagination
+from notification.models import Notification
+from notification.consumers import send_notification
+from asgiref.sync import async_to_sync
+from notification.serializer import NotificationSerializer
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
@@ -50,6 +57,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     "isAccountVerified": user.isAccountVerified,
                     "isDirectFollow": user.isDirectFollow,
                     "created_at": user.created_at,
+                    "banner_image":str(user.banner_image)
                 }
             }, status=status.HTTP_200_OK)
 
@@ -120,7 +128,7 @@ class CustomCursorPagination(CursorPagination):
     - Fetches a limited number of posts per request.
     - Ensures scalability for large datasets.
     """
-    page_size = 1 # Fetch 10 posts at a time
+    page_size = 2 # Fetch 10 posts at a time
     ordering = "-created_at"  # Default ordering (newest first)
 
     def get_paginated_response(self, data):
@@ -185,8 +193,12 @@ def get_user_profile(request,username):
     except MyUser.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     
+    is_follower=Follower.objects.filter(follower=request.user,followed=user).exists()
+    is_follow_request=FollowRequest.objects.filter(sender=request.user,receiver=user).exists()
+    is_requested_me=FollowRequest.objects.filter(sender=user,receiver=request.user).exists()
+    
     serializer = MyUserProfileSerializer(user, context={"request": request})
-    return Response({"success": True, "user": serializer.data,"is_our_profile":request.user.username==user.username}, status=status.HTTP_200_OK)
+    return Response({"success": True, "user": serializer.data,"is_our_profile":request.user.username==user.username,"is_follower":is_follower,"is_follow_request":is_follow_request,"is_requested_me":is_requested_me}, status=status.HTTP_200_OK)
     
     
 
@@ -209,11 +221,11 @@ def get_posts(request):
             )
     result_page = paginator.paginate_queryset(posts, request)
     liked_post_ids = (
-        PostLike.objects.filter(user=my_user).values_list("post_id", flat=True).iterator()
+        set(PostLike.objects.filter(user=my_user).values_list("post_id", flat=True).iterator())
     )
     serializer = PostSerializer(result_page, many=True, context={"request": request})
 
-    data = [{**post, f"liked_by_{my_user.username}": uuid.UUID(post["id"]) in liked_post_ids} for post in serializer.data]
+    data = [{**post, "liked_by_me": uuid.UUID(post["id"]) in liked_post_ids} for post in serializer.data]
     return paginator.get_paginated_response(data)
 
 @api_view(['GET'])
@@ -245,13 +257,13 @@ def get_user_posts(request, username):
     result_page = paginator.paginate_queryset(posts, request)
 
     liked_post_ids = (
-        PostLike.objects.filter(user=request.user).values_list("post_id", flat=True).iterator()
+        set(PostLike.objects.filter(user=request.user).values_list("post_id", flat=True).iterator())
     )
     # iterator avoids all data in memory and makes it memory efficient
 
     serializer = PostSerializer(result_page, many=True, context={"request": request})
 
-    data = [{**post, f"liked_by_{request.user.username}": uuid.UUID(post["id"]) in liked_post_ids} for post in serializer.data]
+    data = [{**post, "liked_by_me": uuid.UUID(post["id"]) in liked_post_ids} for post in serializer.data]
 
     return paginator.get_paginated_response(data)
 
@@ -308,9 +320,32 @@ def send_follow_request(request, username):
         # Send follow request if not following directly
         follow_request, created = FollowRequest.objects.get_or_create(sender=sender, receiver=receiver)
         if created:
+            notification = Notification.objects.create(
+                sender=sender,
+                receiver=receiver,
+                 message=f"{sender.username} sent you a follow request",
+                notification_types=1  # 1 corresponds to 'Follow_Request'
+            )
+            async_to_sync(send_notification)(receiver.username,receiver.profile_image,notification.message)
             return Response({"success": True, "message": f"Follow request sent to {receiver.username}."}, status=status.HTTP_201_CREATED)
         return Response({"success": False, "message": "Follow request already sent."}, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_follow_requests(request):
+    """Fetch all follow requests for the authenticated user."""
+    paginator = CustomCursorPagination()
+    follow_requests = (
+        FollowRequest.objects.filter(receiver=request.user)
+        .select_related('sender')
+        .only("sender__username", "sender__profile_image","created_at")
+    )
+
+    result_page = paginator.paginate_queryset(follow_requests, request)
+    serializer = FollowerFollowingSerializer(result_page, many=True, context={"request": request,"duty":"follow_request"})
+
+    return paginator.get_paginated_response(serializer.data)
 
 @api_view(['POST','GET'])
 @permission_classes([IsAuthenticated])
@@ -379,7 +414,12 @@ def update_user_profile(request):
     """update user profile  - Excludes password from updates. -Supports partial updates.
     - Handles file uploads."""
     my_user=request.user
-    serializer = MyUserUpdateSerializer(my_user, data=request.data, partial=True, context={"request": request})  # Securely pass request context
+    data=request.data.copy()
+    # making a copy since request.data is immutable
+    for key, file in request.FILES.items():
+        data[key] = file
+
+    serializer = MyUserUpdateSerializer(my_user, data=data, partial=True, context={"request": request})  # Securely pass request context
     if serializer.is_valid():
         serializer.save()
         return Response({"success":True,"message":"Profile updated successfully!","user":serializer.data},status=status.HTTP_200_OK)
@@ -455,3 +495,203 @@ def get_post_likes(request, post_id):
     serializer = FollowerFollowingSerializer(result_page, many=True, context={"request": request,"duty":"liked"})
 # context here is used to send certain information to serializer which has to be made available to the serializer
     return paginator.get_paginated_response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def institution_list(request):
+    """List all institutions (scalable for search & filtering)"""
+    institutions = MyInstitution.objects.all()
+    serializer = MyInstitutionSerializer(institutions, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def user_education_list_create(request):
+    """Fetch and add user educational institutions"""
+    if request.method == 'GET':
+        institutions = UserInstitution.objects.filter(user=request.user)
+        serializer = UserInstitutionSerializer(institutions, many=True)
+        return Response({"success": True, "education": serializer.data}, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        serializer = UserInstitutionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response({"success": True, "message": "Education data created successfully!"}, status=status.HTTP_201_CREATED)
+        return Response({"success": False, "message": "Education data creation failed!", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def user_education_detail(request, education_detail_id):
+    """Retrieve, partially update, or delete a user educational record"""
+    try:
+        education = UserInstitution.objects.get(id=education_detail_id)
+    except UserInstitution.DoesNotExist:
+        return Response({"error": "User education data not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        serializer = UserInstitutionSerializer(education)
+        return Response({"success": True, "education": serializer.data}, status=status.HTTP_200_OK)
+
+    elif request.method == 'PATCH':  # Partial Update
+        serializer = UserInstitutionSerializer(education, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"success":True,"message":"Education updated successfully!","education":serializer.data},status=status.HTTP_200_OK)
+        return Response({"success":False,"message":"Education update failed!","errors":serializer.errors},status=status.HTTP_400_BAD_REQUEST)
+
+
+    elif request.method == 'DELETE':
+        education.delete()
+        return Response({"message": "Education record deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_education_detail(request,username):
+    try:
+        user = MyUser.objects.only("id").get(username=username)
+    except MyUser.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT)
+    
+    education = UserInstitution.objects.filter(user=user)
+    serializer = UserInstitutionSerializer(education,many=True)
+    return Response({"success": True, "education": serializer.data}, status=status.HTTP_200_OK)
+
+# clubs
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_club(request):
+    my_user = request.user
+
+    # Check if the user already owns a club
+    if Club.objects.filter(owner=my_user).exists():
+        return Response(
+            {"success": False, "message": "You can only create one club."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    data = request.data.copy()  # Making a mutable copy
+    for key, file in request.FILES.items():
+        data[key] = file
+    print(data)
+
+    serializer = ClubSerializer(data=data, context={'request': request})
+    if serializer.is_valid():
+        serializer.save()  
+        return Response({"success": True, "message": "Club created successfully!"}, status=status.HTTP_201_CREATED)
+    
+    return Response({"success": False, "message": "Club creation failed!", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST','GET'])
+@permission_classes([IsAuthenticated])
+def join_club(request,club_id):
+    """Join a club if not already a member."""
+    my_user=request.user
+
+    try:
+        club= Club.objects.get(id=club_id)
+    except Club.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND) 
+
+    with transaction.atomic():
+        _,created = ClubMember.objects.get_or_create(follower=my_user,club=club)
+        if created:
+            return Response({"success": True, "message": f"You are now member {club.name}."}, status=status.HTTP_200_OK)
+        return Response({"success": False, "message": "You are already member this club."}, status=status.HTTP_400_BAD_REQUEST)
+    
+@api_view(['POST','GET'])
+@permission_classes([IsAuthenticated])
+def leave_club(request,club_id):
+    """Leave a club if already a member."""
+    my_user=request.user
+
+    try:
+        club= Club.objects.get(id=club_id)
+    except Club.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND) 
+
+    try:
+        member= ClubMember.objects.get(follower=my_user,club=club)
+    except ClubMember.DoesNotExist:
+        return Response({"error": "You are not member of this club"}, status=status.HTTP_400_BAD_REQUEST) 
+
+    member.delete()
+    return Response({"success": True, "message": f"You have left {club.name}."}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_club_list(request):
+    """Fetch all clubs."""
+    paginator = CustomCursorPagination()
+    clubs = Club.objects.all()
+    result_page = paginator.paginate_queryset(clubs, request)
+    serializer = ClubListSerializer(result_page, many=True, context={"request": request})
+    return paginator.get_paginated_response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_club_details(request,club_id):
+    """Fetch club details."""
+    try:
+        club = Club.objects.annotate(
+            follower_count=Count('Clubs',distinct=True)
+        ).get(id=club_id)
+        # Clubs related name for getting all clubs in ClubMember model
+    except Club.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    member_of_club = ClubMember.objects.filter(follower=request.user,club=club).exists()
+    
+
+    serializer = ClubSerializer(club, context={"request": request})
+    return Response({"success": True, "user": serializer.data,"is_my_club":request.user.username==club.owner.username,"member_of_club":member_of_club}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_club_members(request,club_id):
+    """Fetch all members of a specific club."""
+    try:
+        club = Club.objects.get(id=club_id)
+    except Club.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    paginator = CustomCursorPagination()
+
+    members = (
+        ClubMember.objects
+        .filter(club=club)
+        .select_related('follower')  # Optimize the query with follower field of clubMember
+        .only("follower__username", "follower__profile_image","created_at")  # Fetch only required fields
+    )
+
+    result_page = paginator.paginate_queryset(members, request)
+    serializer = FollowerFollowingSerializer(result_page, many=True, context={"request": request,"duty":"club_member"})
+
+    return paginator.get_paginated_response(serializer.data)  
+
+
+# notification
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_notifications(request):
+    user=request.user
+    paginator = CustomCursorPagination()
+    notifications_data = (
+        Notification.objects
+        .filter(receiver=user)
+        .select_related('sender')
+        .only('id','sender','receiver','message','is_read','created_at','notification_types',"sender__profile_image")
+    )
+    result_page=paginator.paginate_queryset(notifications_data,request)
+    serializer=NotificationSerializer(result_page,many=True,context={"request":request})
+    return paginator.get_paginated_response(serializer.data)
+
+@api_view(['GET'])
+def test(request):
+    # async_to_sync coz views are synchronous and send_notification method is asynchronous
+    async_to_sync(send_notification)('jinwoo', 'blakyblaky', True)
+    return Response('notification sent')

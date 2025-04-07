@@ -1,5 +1,7 @@
 import { FaSearch } from "react-icons/fa";
 import { CiShoppingCart } from "react-icons/ci";
+import { IoMdNotificationsOutline } from "react-icons/io";
+
 
 const SearchBar = () => {
     return (
@@ -14,8 +16,9 @@ const SearchBar = () => {
                     />
                 </div>
                 <div className="flex gap-4 justify-center items-center">
-                    <span className="text-gray-500 bg-gray-100 rounded-2xl p-2 cursor-pointer hover:text-purple-500 transition-all duration-300"><CiShoppingCart /></span>
-                    <span className="text-gray-500 cursor-pointer hover:text-purple-500 transition-all duration-300">Lorem</span>
+                    <span className="text-gray-600 bg-gray-100 rounded-2xl p-2 cursor-pointer hover:text-purple-500 transition-all duration-300"><IoMdNotificationsOutline /></span>
+                    <span className="text-gray-600 bg-gray-100 rounded-2xl p-2 cursor-pointer hover:text-purple-500 transition-all duration-300"><CiShoppingCart /></span>
+                    <span className="text-gray-600 cursor-pointer hover:text-purple-500 transition-all duration-300">Lorem</span>
                 </div>
             </div>
         </>

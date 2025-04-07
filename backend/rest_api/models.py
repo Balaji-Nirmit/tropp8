@@ -121,3 +121,73 @@ class FollowRequest(models.Model):
     def __str__(self):
         return f"{self.sender} → {self.receiver} (Follow Request)"
 
+class MyInstitution(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    city = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    country = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    website = models.URLField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+    
+class UserInstitution(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey("MyUser", on_delete=models.CASCADE, related_name="user_education")
+    institution = models.ForeignKey("MyInstitution", on_delete=models.CASCADE, related_name="student_instution")
+    degree = models.CharField(max_length=255, blank=True, null=True)
+    start_date = models.DateTimeField(blank=True, null=True, help_text="Stored as YYYY-MM-01")  
+    end_date = models.DateTimeField(blank=True, null=True, help_text="Stored as YYYY-MM-01")  
+    is_current = models.BooleanField(default=False)  
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user','institution','degree'],name='unique_educational_background')
+        ]
+    def formatted_start_date(self):
+        return self.start_date.strftime("%Y-%m") if self.start_date else None
+
+    def formatted_end_date(self):
+        return self.end_date.strftime("%Y-%m") if self.end_date else None
+
+    def __str__(self):
+        return f"{self.user} at {self.institution} ({self.degree})"
+
+
+class Club(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True, help_text="Description of the club")
+    owner = models.OneToOneField(MyUser, on_delete=models.CASCADE, related_name="owned_club")
+    institution = models.ForeignKey(MyInstitution, on_delete=models.SET_NULL, null=True, blank=True, related_name="clubs")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    profile_image = models.ImageField(upload_to='club_profile_image/', blank=True, null=True)
+    banner_image = models.ImageField(upload_to='club_banner_images/', blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['institution']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+class ClubMember(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    follower = models.ForeignKey(MyUser, on_delete=models.CASCADE, related_name='member')
+    club = models.ForeignKey(Club, on_delete=models.CASCADE, related_name='Clubs')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['follower', 'club'], name="unique_membership")
+        ]
+
+    def __str__(self):
+        return f"{self.follower} is member of {self.club}"

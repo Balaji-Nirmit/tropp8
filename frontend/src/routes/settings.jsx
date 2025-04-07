@@ -1,70 +1,74 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { logout, update_user } from "../api/endpoints"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { update_user } from "../api/endpoints";
 
 const Setting = () => {
+    const storage = JSON.parse(localStorage.getItem("userData"));
 
-    const storage = JSON.parse(localStorage.getItem('userData'))
+    const [username, setUsername] = useState(storage ? storage.username : "");
+    const [firstName, setFirstName] = useState(storage ? storage.first_name : "");
+    const [lastName, setLastName] = useState(storage ? storage.last_name : "");
+    const [bio, setBio] = useState(storage ? storage.bio : "");
+    const [profileImage, setProfileImage] = useState(null);
+    const [bannerImage, setBannerImage] = useState(null);
 
-    const [username, setUsername] = useState(storage ? storage.username : '')
-    const [email, setEmail] = useState(storage ? storage.email : '')
-    const [firstName, setFirstName] = useState(storage ? storage.first_name : '')
-    const [lastName, setLastName] = useState(storage ? storage.last_name : '')
-    const [bio, setBio] = useState(storage ? storage.bio : '')
-    const [profileImage, setProfileImage] = useState(storage ? storage.profile_image : '')
-
-    const nav=useNavigate()
-
-    const handleLogout = async () => {
-        try {
-            await logout();
-            nav('/login')
-        } catch {
-            alert ('error logging out')
-        }
-    }
+    const nav = useNavigate();
 
     const handleUpdate = async (e) => {
-        e.preventDefault()
+        e.preventDefault();
+        
+        const formData = new FormData();
+        formData.append("first_name", firstName);
+        formData.append("last_name", lastName);
+        formData.append("bio", bio);
+
+        if (profileImage) formData.append("profile_image", profileImage);
+        if (bannerImage) formData.append("banner_image", bannerImage);
+
         try {
-            await update_user({"username":username, "profile_image": profileImage, "email":email, "first_name":firstName, "last_name":lastName, "bio":bio})
-            localStorage.setItem("userData", JSON.stringify({"username":username, "email":email, "first_name":firstName, "last_name":lastName, "bio":bio}))
-            alert('successfully updated')
-        } catch {
-            alert('error updating details')
+            const response = await update_user(formData);
+
+            // Store file names in localStorage
+            storage.bio=response.user.bio
+            storage.first_name=response.user.first_name
+            storage.last_name=response.user.last_name
+            storage.banner_image=response.user.banner_image
+            storage.profile_image=response.user.profile_image
+
+            localStorage.setItem("userData", JSON.stringify(storage));
+
+            alert("Successfully updated!");
+        } catch (error) {
+            alert("Error updating details.");
+            console.error("Update Error:", error);
         }
-    }
+    };
+
     return (
         <>
-            <form onSubmit={handleUpdate} className="flex flex-col gap-2">
+            <form onSubmit={handleUpdate} className="flex flex-col gap-2" encType="multipart/form-data">
                 <label>Profile Picture</label>
-               
-                <input onChange={(e) => setProfileImage(e.target.files[0])} type='file' />
+                <input onChange={(e) => setProfileImage(e.target.files[0])} type="file" />
 
+                <label>Banner Image</label>
+                <input onChange={(e) => setBannerImage(e.target.files[0])} type="file" />
 
                 <label>Username</label>
-                <input onChange={(e) => setUsername(e.target.value)} value={username} type='text' />
-
-
-                <label>Email</label>
-                <input onChange={(e) => setEmail(e.target.value)} value={email} type='email' />
-
+                <input onChange={(e) => setUsername(e.target.value)} value={username} type="text" />
 
                 <label>First Name</label>
-                <input onChange={(e) => setFirstName(e.target.value)} value={firstName} type='text' />
-
+                <input onChange={(e) => setFirstName(e.target.value)} value={firstName} type="text" />
 
                 <label>Last Name</label>
-                <input onChange={(e) => setLastName(e.target.value)} value={lastName} type='text' />
-
+                <input onChange={(e) => setLastName(e.target.value)} value={lastName} type="text" />
 
                 <label>Bio</label>
-                <input onChange={(e) => setBio(e.target.value)} value={bio} type='text' />
+                <input onChange={(e) => setBio(e.target.value)} value={bio} type="text" />
 
-                <button type='submit'>update</button>
+                <button type="submit">Update</button>
             </form>
-            <button onClick={handleLogout} >Logout</button>
         </>
-    )
-}
+    );
+};
+
 export default Setting;
